@@ -1,0 +1,9 @@
+{
+  "controls": "orbit",
+  "maxPlayers": 10,
+  "table": {
+    "target": [0, 1.2, 0],
+    "camera": [0, 4.2, 6.4]
+  },
+  "elements": []
+}

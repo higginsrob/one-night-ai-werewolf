@@ -1,0 +1,12 @@
+Poly Haven assets (CC0) — https://polyhaven.com/license
+
+- Jacaranda Tree — https://polyhaven.com/a/jacaranda_tree
+  Authors: Rico Cilliers, Rob Tuytel
+- Grass Medium 02 — https://polyhaven.com/a/grass_medium_02
+  Author: Rico Cilliers
+  (used as 3D tufts; the diffuse atlas is not a seamless ground map)
+- Wooden Picnic Table — https://polyhaven.com/a/wooden_picnic_table
+  Author: Ulan Cabanilla
+
+Files here are web-optimized (simplified + Draco + WebP) derivatives of the
+1K glTF downloads from Poly Haven.

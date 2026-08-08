@@ -1,0 +1,35 @@
+# Compose loads `omniVoice/.env` for ${VAR} interpolation (not the repo-root .env).
+services:
+  omnivoice:
+    build: .
+    image: onw-omnivoice:cuda
+    ports:
+      - "${PORT:-8880}:8880"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DEVICE: ${DEVICE:-cuda:0}
+      MODEL_ID: ${MODEL_ID:-k2-fsa/OmniVoice}
+      HF_HOME: /app/data/models
+      OMNIVOICE_DATA: /app/data
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-change-me}
+      # Do not set HF_ENDPOINT to "" — huggingface_hub treats that as the
+      # base URL and fails with "missing http:// or https:// protocol".
+      # Optional mirror: HF_ENDPOINT=https://hf-mirror.com
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
+      # Optional: Hugging Face token for higher rate limits on first model pull
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - omnivoice_data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  omnivoice_data:

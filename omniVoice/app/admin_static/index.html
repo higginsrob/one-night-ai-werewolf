@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OmniVoice Admin</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #12141a;
+        --fg: #e8e6e1;
+        --muted: #9a958c;
+        --card: #1c1f28;
+        --accent: #c4a574;
+        --danger: #c45c5c;
+        --border: #2a2e3a;
+        font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 600px at 10% -10%, #2a2430, var(--bg));
+        color: var(--fg);
+        min-height: 100vh;
+      }
+      main {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+      }
+      h1 {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin: 0 0 0.25rem;
+      }
+      .sub {
+        color: var(--muted);
+        margin-bottom: 1.5rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem 1.1rem;
+        margin-bottom: 1rem;
+      }
+      label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+      }
+      input[type="password"],
+      input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem 0.7rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #0e1016;
+        color: var(--fg);
+      }
+      .row {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      button {
+        border: 1px solid var(--border);
+        background: #262a36;
+        color: var(--fg);
+        border-radius: 6px;
+        padding: 0.45rem 0.85rem;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #1a1208;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      button.danger {
+        background: transparent;
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.55rem 0.4rem;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.82rem;
+      }
+      .err {
+        color: var(--danger);
+        margin-top: 0.5rem;
+      }
+      .ok {
+        color: #7dba7d;
+        margin-top: 0.5rem;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>OmniVoice Admin</h1>
+      <p class="sub">Manage cloned voices and service health.</p>
+
+      <section class="card">
+        <label for="token">Admin token</label>
+        <div class="row">
+          <input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" />
+          <button type="button" class="primary" id="saveToken">Save</button>
+          <button type="button" id="refresh">Refresh</button>
+        </div>
+        <p id="tokenMsg" class="ok" hidden></p>
+      </section>
+
+      <section class="card">
+        <h2 style="margin-top: 0; font-size: 1.05rem">Health</h2>
+        <pre id="health">Loading…</pre>
+        <div class="row" style="margin-top: 0.75rem">
+          <button type="button" id="unload">Unload model</button>
+          <button type="button" class="danger" id="clearAll">Delete all voices</button>
+        </div>
+        <p id="actionMsg" class="err" hidden></p>
+      </section>
+
+      <section class="card">
+        <h2 style="margin-top: 0; font-size: 1.05rem">Voices</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Id</th>
+              <th>Created by</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="voices"></tbody>
+        </table>
+        <p id="voicesEmpty" class="sub" hidden>No voices yet.</p>
+      </section>
+    </main>
+    <script>
+      const TOKEN_KEY = "omnivoice_admin_token";
+      const tokenInput = document.getElementById("token");
+      const tokenMsg = document.getElementById("tokenMsg");
+      const actionMsg = document.getElementById("actionMsg");
+      const healthEl = document.getElementById("health");
+      const voicesEl = document.getElementById("voices");
+      const voicesEmpty = document.getElementById("voicesEmpty");
+
+      tokenInput.value = localStorage.getItem(TOKEN_KEY) || "";
+
+      function token() {
+        return tokenInput.value.trim();
+      }
+
+      function show(el, text, ok) {
+        el.hidden = !text;
+        el.textContent = text || "";
+        el.className = ok ? "ok" : "err";
+      }
+
+      async function api(path, opts = {}) {
+        const headers = Object.assign({}, opts.headers || {});
+        const t = token();
+        if (t) headers["X-Admin-Token"] = t;
+        const res = await fetch(path, { ...opts, headers });
+        const text = await res.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = { detail: text };
+        }
+        if (!res.ok) {
+          const detail = data && data.detail ? data.detail : res.statusText;
+          throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+        }
+        return data;
+      }
+
+      async function refresh() {
+        show(actionMsg, "", true);
+        try {
+          const health = await api("/health");
+          healthEl.textContent = JSON.stringify(health, null, 2);
+        } catch (e) {
+          healthEl.textContent = String(e.message || e);
+        }
+        try {
+          const list = await api("/v1/voices");
+          const data = (list && list.data) || [];
+          voicesEl.innerHTML = "";
+          voicesEmpty.hidden = data.length > 0;
+          for (const v of data) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${escapeHtml(v.name)}</td>
+              <td class="mono">${escapeHtml(v.id)}</td>
+              <td class="mono">${escapeHtml(v.createdBy || "")}</td>
+              <td class="mono">${escapeHtml(v.createdAt || "")}</td>
+              <td></td>`;
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "danger";
+            btn.textContent = "Delete";
+            btn.addEventListener("click", async () => {
+              if (!confirm(`Delete voice “${v.name}”?`)) return;
+              try {
+                await api(`/v1/voices/${encodeURIComponent(v.id)}`, { method: "DELETE" });
+                await refresh();
+              } catch (e) {
+                show(actionMsg, String(e.message || e), false);
+              }
+            });
+            tr.lastElementChild.appendChild(btn);
+            voicesEl.appendChild(tr);
+          }
+        } catch (e) {
+          voicesEmpty.hidden = false;
+          voicesEmpty.textContent = String(e.message || e);
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      document.getElementById("saveToken").addEventListener("click", () => {
+        localStorage.setItem(TOKEN_KEY, token());
+        show(tokenMsg, "Token saved in this browser.", true);
+      });
+      document.getElementById("refresh").addEventListener("click", refresh);
+      document.getElementById("unload").addEventListener("click", async () => {
+        try {
+          await api("/admin/api/unload-model", { method: "POST" });
+          show(actionMsg, "Model unloaded.", true);
+          await refresh();
+        } catch (e) {
+          show(actionMsg, String(e.message || e), false);
+        }
+      });
+      document.getElementById("clearAll").addEventListener("click", async () => {
+        if (!confirm("Delete ALL cloned voices?")) return;
+        try {
+          const r = await api("/admin/api/clear-voices", { method: "POST" });
+          show(actionMsg, `Deleted ${r.deleted} voices.`, true);
+          await refresh();
+        } catch (e) {
+          show(actionMsg, String(e.message || e), false);
+        }
+      });
+
+      refresh();
+    </script>
+  </body>
+</html>
